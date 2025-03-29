@@ -1,53 +1,37 @@
-from fastapi import FastAPI, Form, Response, Cookie, Depends, HTTPException
-from fastapi.responses import JSONResponse
-from fastapi.security import OAuth2PasswordBearer
-from starlette.middleware.cors import CORSMiddleware
-import secrets
+from fastapi import FastAPI, Response, Cookie, HTTPException
+from pydantic import BaseModel
 
 app = FastAPI()
 
-# Для работы с CORS, если потребуется
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Предположим, у нас есть простая база пользователей
-fake_db = {
-    "user123": "password123"
+users_bd = {
+    "username": "user123",
+    "password": "password123"
 }
 
-# Словарь для хранения токенов
-active_sessions = {}
+class UserLogin(BaseModel):
+    username: str
+    password: str
 
-# Маршрут входа в систему
+session_token_value = "abc123xyz456"
+
+
 @app.post("/login")
-async def login(username: str = Form(...), password: str = Form(...), response: Response = None):
-    if username in fake_db and fake_db[username] == password:
-        # Генерируем уникальный токен для сессии пользователя
-        session_token = secrets.token_hex(16)
-        active_sessions[session_token] = username  # Сохраняем токен и имя пользователя
-        response.set_cookie(key="session_token", value=session_token, httponly=True)
-        return JSONResponse(content={"message": "Login successful"}, status_code=200)
+async def login(data: UserLogin):
+    if data.username == users_bd["username"] and data.password == users_bd["password"]:
+        response = Response(content='{"message": "Успешный вход в систему"}', media_type="application/json")
+        response.set_cookie(
+            key="session_token",
+            value=session_token_value,
+            httponly=True,
+            secure=True,
+            samesite="lax"
+        )
+        return response
     else:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-# Защищенный маршрут
 @app.get("/user")
 async def get_user(session_token: str = Cookie(None)):
-    if session_token is None or session_token not in active_sessions:
+    if session_token is None or session_token != session_token_value:
         raise HTTPException(status_code=401, detail="Unauthorized")
-    
-    username = active_sessions[session_token]
-    user_info = {
-        "username": username,
-        "message": "Welcome to the protected route!"
-    }
-    return user_info
-
-if __name__ == '__main__':
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    return {"username": "user123", "email": "user123@example.com"}
